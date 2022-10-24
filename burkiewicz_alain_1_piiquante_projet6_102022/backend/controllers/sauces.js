@@ -37,6 +37,8 @@ exports.createSauce = (req, res, next) => {
 exports.modifySauce = (req, res, next) => {
     const sauceObject = req.file ? // Vérifier si l'utilisateur a effectué un upload d'une image
     {
+        // Analyse des données avec JSON.parse(), les données deviennent un objet JavaScript.
+
         ...JSON.parse(req.body.sauce),
         imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
     } : {...req.body};
@@ -96,58 +98,93 @@ exports.getAllSauce = (req, res, next) => {
 
 
 exports.likeDislike = (req, res, next) => {
-    if (req.body.like < 1) { 
-        console.log(reg.body.like, "Déja validé");
-    
-    }
-    else if(req.body.like == 1) {
-        Sauce.updateOne({_id: req.params.id}, {
+    const userId = req.body.userId;
+    const userChoix = req.body.like;
+    const filter = { _id: req.params.id };
 
-            // Incrémentation de 1 dans likes
-            $inc: { likes: +1},
-            // Ajoute la valeur spécifiée
-            $push: {usersLiked: req.body.userId}
-        })
-        .then(() => res.status(200).json({message: 'Vous appréciez cette sauce !'}))
-        .catch(error => res.status(400).json({ error }));
-        // Sinon, si like = -1
-    } else if(req.body.like == -1) {
-        Sauce.updateOne({_id: req.params.id}, {
-            // Incrémentation de 1 dans dislike
-            $inc: { dislikes: +1},
-            // On push la valeur spécifiée
-            $push: {usersDisliked: req.body.userId}
-        })
-        .then(() => res.status(200).json({message: 'Vous n\'aimez pas cette sauce !'}))
-        .catch(error => res.status(400).json({ error }));
-        // Sinon, si like = 0
-    } else if(req.body.like == 0) {
-        console.log(req.body);
-        Sauce.findOne({ _id: req.params.id })
-        .then((sauce) => {
-            if(sauce.usersLiked.includes(req.body.userId)){
-                Sauce.updateOne({_id: req.params.id}, {
-                    // On incrémente de -1 afin d'annuler le Like
-                    $inc: { likes: -1},
-                    // On push la valeur spécifiée
-                    $pull: {usersLiked: req.body.userId}
-                })
-                .then(() => res.status(200).json({message: 'Vous annulez votre like pour cette sauce !'}))
-                .catch(error => res.status(400).json({ error }));
+    Sauce.findOne(filter)
+        .then(thisSauce => {
+
+            // Verification si l'utilisateur a déjà voté et quoi depuis la base de données
+
+            let aDejaVote = thisSauce.usersLiked.includes(userId) ? 'like'
+                : thisSauce.usersDisliked.includes(userId) ? 'dislike'
+                    : false;
+
+            // Initialisation de la variable 'update' pour le prochain crud unpdateOne
+
+            let update;
+
+            // Alimenter la variable 'update' en fonction du choix de l'utilisateur
+            // Utilisation de "$inc" incrémentation, "$addToset" ajout, "$pull" suppression, de valeur dans MongoDb 
+            
+            switch (userChoix) {
+
+                // Like : On ajoute 1 au like
+                // Case = 1
+
+                case (1):
+                    if (!aDejaVote) {
+                        update = {
+                            $addToSet: { usersLiked: userId },
+                            $inc: { likes: +1 }
+                           
+                        };
+                        console.log(update, "!de A déja voté like +1");
+                    }
+                    break;
+
+                // Dislike : On ajoute 1 au dislike
+                // Case = -1
+
+            
+
+                case (-1):
+                    if (!aDejaVote) {
+                        update = {
+                            $addToSet: { usersDisliked: userId },
+                            $inc: { dislikes: +1 }
+                        };
+                        console.log(update, "!de A déja voté dislike +1");
+                    }
+                    break;
+
+                // Reset 
+                //Case = 0
+
+                case (0):
+
+                    // L'utilisateur a déja aimé avant : On enlève -1 au like
+
+                    if (aDejaVote === 'like') {
+                        update = {
+                            $pull: { usersLiked: userId },
+                            $inc: { likes: -1 }
+                        };
+                        console.log(update, "A déja voté like -1");
+                    }
+                    // L'utilisateur n'a pas déja aimé avant : On enlève -1 au dislike
+
+                    if (aDejaVote === 'dislike') {
+                        update = {
+                            $pull: { usersDisliked: userId},
+                            $inc: { dislikes: -1 }
+                        };
+                        console.log(update, "A déja voté dislike -1");
+
+                    }
+                    break;
             }
-            if(sauce.usersDisliked.includes(req.body.userId)){
-                Sauce.updateOne({_id: req.params.id}, {
-                    // On incrémente de -1 le dislike afin d'annuler le dislike
-                    $inc: { dislikes: -1},
-                    // On push la valeur spécifiée
-                    $pull: {usersDisliked: req.body.userId}
-                })
-                .then(() => res.status(200).json({message: 'Vous annulez votre dislike pour cette sauce !'}))
-                .catch(error => res.status(400).json({ error }));
+
+             // Mettre à jour avec like ou dislike si changement approprié
+
+             if (update !== undefined) {
+                Sauce.updateOne(filter, update)
+                    .then(() => res.status(200).json({ message: 'Ici les changements apportés / aimé, pas aimé ' }))
+                    .catch(error => res.status(400).json({ error }));
             }
         })
-        
-    }
+        .catch(error => res.status(400).json({ error }));
 }
 
 

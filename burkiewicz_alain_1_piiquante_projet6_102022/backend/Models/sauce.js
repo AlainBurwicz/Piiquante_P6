@@ -2,7 +2,6 @@
 
 const mongoose = require('mongoose'); // Package Mongoose interface qui interagit avec MongoDB
 const sanitizerPlugin = require('mongoose-sanitizer-plugin'); // Désinfectant pour les modèles de mongoose
-const sauceValidation = require('../middleware/valideSauce');
 
 
 // ************************* SCHEMA *************************
